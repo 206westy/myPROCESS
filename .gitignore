@@ -1,0 +1,40 @@
+# ===== 데이터는 git에 올리지 않는다 (로컬 전용) =====
+# EHM target raw data 폴더
+/supraxp_ehm target data/
+/zip/
+
+# 데이터 파일 확장자 (어디에 있든 제외 - 안전장치)
+*.csv
+*.zip
+*.sLDH
+*.parquet
+*.xlsx
+*.xls
+
+# ===== 환경/비밀 =====
+.env
+.env.*
+*.key
+*.pem
+secrets.*
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# ===== OS / 에디터 =====
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
+
+# ===== 로그 / 임시 =====
+*.log
+tmp/
+temp/
