@@ -11,6 +11,9 @@
 *.xlsx
 *.xls
 
+# ===== Claude 로컬 설정(개인 오버라이드) =====
+.claude/settings.local.json
+
 # ===== 환경/비밀 =====
 .env
 .env.*
@@ -38,3 +41,21 @@ desktop.ini
 *.log
 tmp/
 temp/
+
+# ===== Node / Next.js =====
+node_modules/
+.next/
+out/
+build/
+dist/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+coverage/
+playwright-report/
+test-results/
+
+# ===== 인제스트 산출 DB (data는 git 추적 안 함) =====
+/data/
+*.duckdb
+*.duckdb.wal
