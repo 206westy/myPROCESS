@@ -24,3 +24,19 @@ export interface ContextMeta {
   contexts: ContextRow[];
   signals: SignalStat[];
 }
+
+export interface WaferStepRow {
+  lot: string;
+  waferNo: string;
+  recipe: string;
+  stage: string;
+  recipeStepNum: number;
+  samples: number;
+  startTime: string;
+}
+
+export interface TraceSeries {
+  time: string[];
+  signals: Record<string, (number | null)[]>;
+  samples: number;
+}

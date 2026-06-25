@@ -9,7 +9,12 @@
 import { query } from './duckdb';
 import { SIGNAL_COLUMNS, TRACE_TABLE, SIGNAL_STATS_TABLE } from '../csv/columns';
 import type { SpcContext, WaferPoint } from '../spc/types';
-import type { ContextRow, SignalStat } from '../api/types';
+import type {
+  ContextRow,
+  SignalStat,
+  WaferStepRow,
+  TraceSeries,
+} from '../api/types';
 
 const SIGNAL_SET = new Set<string>(SIGNAL_COLUMNS);
 
@@ -114,6 +119,68 @@ export async function getWaferPoints(
       max: Number(r.max_val ?? r.value),
       samples: Number(r.samples),
     }));
+}
+
+/** FDC 선택기용 (Lot×Wafer×Recipe×Stage×Step) 목록 — 시간순 */
+export async function listWaferSteps(): Promise<WaferStepRow[]> {
+  const rows = await query<{
+    lot: string;
+    wafer_no: string;
+    recipe: string;
+    stage: string;
+    recipe_step_num: number;
+    samples: bigint | number;
+    start_time: string;
+  }>(`
+    SELECT lot, wafer_no, recipe, stage, recipe_step_num,
+      count(*)::INTEGER AS samples,
+      strftime(min(processed_time), '%Y-%m-%dT%H:%M:%S') AS start_time
+    FROM ${TRACE_TABLE}
+    GROUP BY lot, wafer_no, recipe, stage, recipe_step_num
+    ORDER BY start_time
+  `);
+  return rows.map((r) => ({
+    lot: r.lot,
+    waferNo: r.wafer_no,
+    recipe: r.recipe,
+    stage: r.stage,
+    recipeStepNum: Number(r.recipe_step_num),
+    samples: Number(r.samples),
+    startTime: r.start_time,
+  }));
+}
+
+/**
+ * 한 (Lot×Wafer×Step)의 고주파 트레이스를 선택 신호들에 대해 반환.
+ * 신호명은 화이트리스트 검증 후에만 SQL에 보간한다.
+ */
+export async function getTrace(
+  lot: string,
+  waferNo: string,
+  recipeStepNum: number,
+  signals: string[],
+): Promise<TraceSeries> {
+  const cols = signals.map(assertSignal);
+  const selectCols = cols.map((c) => `${c}`).join(', ');
+  const rows = await query<Record<string, unknown>>(
+    `
+    SELECT strftime(processed_time, '%Y-%m-%dT%H:%M:%S.%g') AS t${cols.length ? `, ${selectCols}` : ''}
+    FROM ${TRACE_TABLE}
+    WHERE lot = ? AND wafer_no = ? AND recipe_step_num = ?
+    ORDER BY processed_time
+  `,
+    [lot, waferNo, recipeStepNum],
+  );
+
+  const time = rows.map((r) => String(r.t));
+  const series: Record<string, (number | null)[]> = {};
+  for (const c of cols) {
+    series[c] = rows.map((r) => {
+      const v = r[c];
+      return v === null || v === undefined ? null : Number(v);
+    });
+  }
+  return { time, signals: series, samples: rows.length };
 }
 
 export interface DatasetSummary {
