@@ -40,3 +40,39 @@ export interface TraceSeries {
   signals: Record<string, (number | null)[]>;
   samples: number;
 }
+
+export interface DimensionFindingDto {
+  dimension: string;
+  value: string;
+  badCount: number;
+  goodCount: number;
+  badRatio: number;
+  goodRatio: number;
+  ratioGap: number;
+  z: number;
+  significant: boolean;
+  support: number;
+}
+
+export interface AnomalyRowDto {
+  lot: string;
+  waferNo: string;
+  recipe: string;
+  stage: string;
+  step: number;
+  chamber: string;
+  time: string;
+  value: number;
+  robustZ: number;
+}
+
+export interface CommonalityReportDto {
+  signal: string;
+  indicator: string;
+  k: number;
+  totalRows: number;
+  badRows: number;
+  goodRows: number;
+  findings: DimensionFindingDto[];
+  anomalies: AnomalyRowDto[];
+}

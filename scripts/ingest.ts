@@ -19,6 +19,11 @@ import {
   TRACE_TABLE,
   SIGNAL_STATS_TABLE,
 } from '../lib/csv/columns.js';
+import {
+  INDICATORS_TABLE,
+  buildIndicatorsTableSql,
+  buildIndicatorIndexSql,
+} from '../lib/indicators/sql.js';
 
 const DATA_GLOB = 'supraxp_ehm target data/RawData_*.csv';
 const DB_DIR = path.join(process.cwd(), 'data');
@@ -95,6 +100,12 @@ async function main() {
     ${signalStatsSelect()};
   `);
 
+  console.log('[ingest] wafer_step_indicators 산출(FDC 지표 엔진)...');
+  await conn.run(buildIndicatorsTableSql());
+  for (const ddl of buildIndicatorIndexSql()) {
+    await conn.run(ddl);
+  }
+
   // ---- 검증 ----
   const rowsReader = await conn.runAndReadAll(
     `SELECT count(*) AS n FROM ${TRACE_TABLE}`,
@@ -123,6 +134,12 @@ async function main() {
   console.log(`Stage / Step    : ${ctx.stages} / ${ctx.steps}`);
   console.log(`웨이퍼 런        : ${ctx.wafer_runs} (기대 292)`);
   console.log(`타임스탬프 NULL : ${nullTs}`);
+
+  const indReader = await conn.runAndReadAll(
+    `SELECT count(*) AS n, count(DISTINCT signal) AS sig FROM ${INDICATORS_TABLE}`,
+  );
+  const ind = indReader.getRowObjects()[0];
+  console.log(`지표 행수       : ${Number(ind.n).toLocaleString()} (${ind.sig} 신호)`);
 
   if (rowCount !== EXPECTED_ROWS) {
     throw new Error(`행수 불일치: ${rowCount} != ${EXPECTED_ROWS}`);

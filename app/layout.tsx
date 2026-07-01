@@ -11,6 +11,11 @@ const NAV = [
   { href: '/', label: '대시보드' },
   { href: '/spc', label: '적응형 SPC' },
   { href: '/fdc', label: 'FDC 트레이스' },
+  { href: '/mspc', label: '다변량 FDC' },
+  { href: '/commonality', label: 'Commonality' },
+  { href: '/equipment', label: '장비관리' },
+  { href: '/yield', label: '수율 연결' },
+  { href: '/benchmark', label: '벤치마크' },
 ];
 
 export default function RootLayout({

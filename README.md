@@ -34,8 +34,14 @@ SupraXP 드라이스트립(애싱) 설비의 **EHM(Equipment Health Monitoring) 
 ```bash
 pnpm install
 
-# 1) CSV → DuckDB 인제스트 (data/ehm.duckdb 생성, 행수/웨이퍼런 검증)
+# 1) CSV → DuckDB 인제스트 (data/ehm.duckdb 생성, 지표 테이블 포함, 검증)
 pnpm ingest
+
+# 1b) (기존 DB에 지표만 추가/재빌드 — CSV 재인제스트 없이)
+pnpm build:indicators
+
+# 1c) (선택) 수율/품질 CSV 연결 — data/quality.csv 있으면 wafer_quality 적재
+pnpm load:quality
 
 # 2) 개발 서버
 pnpm dev          # http://localhost:3000
@@ -53,8 +59,21 @@ pnpm test         # vitest (SPC 수학)
 | 경로 | 설명 |
 |---|---|
 | `/` | 대시보드 — KPI, 공정 위험 순위(핵심 신호×상위 컨텍스트 SPC 스캔), 최근 런 |
-| `/spc` | **컨텍스트 적응형 SPC** — 컨텍스트별 동적 관리한계 + WE 위반 룰 |
+| `/spc` | **컨텍스트 적응형 SPC** — 컨텍스트별 동적 관리한계 + WE 룰 + **지표(indicator) 선택** |
 | `/fdc` | FDC 트레이스 — 웨이퍼 런별 다중 신호 정규화 오버레이 |
+| `/mspc` | 다변량 FDC — 컨텍스트별 PCA + Hotelling T² + SPE/Q + 기여도 |
+| `/commonality` | **Commonality** — 이상 웨이퍼가 몰린 컨텍스트(recipe/stage/step/챔버/lot/날짜) ratio-gap 순위 |
+| `/equipment` | **장비관리** — 트레이스 재구성 가동률(E10 영감)·평균 런 간격·RF 누적 PM 프록시 |
+| `/yield` | **수율 연결** — 지표↔수율 Pearson 상관(데이터 연결 시 활성, 조인 키 lot+wafer_no) |
+| `/benchmark` | 검출법 벤치마크(합성 결함·ARL·P/R/F1) |
+
+### FDC 지표 엔진 (`wafer_step_indicators`)
+
+산업 표준 FDC 파이프라인 **Trace → Window → Indicator → SPC/MSPC**의 지표층.
+인제스트 시 신호×step별로 표준 지표 카탈로그(mean·median·std·robust_std·slope·area·
+overshoot·rate_of_change·percentile 등 20종)를 **단일 패스 집계로 사전계산**해
+materialized 테이블에 적재한다(265,727행 · 119신호 · 2,233 웨이퍼×step). SPC/Commonality/
+수율 상관이 모두 이 테이블 위에서 동작한다. 정의는 `lib/indicators/catalog.ts` 단일 출처.
 
 ## 아키텍처
 
@@ -68,11 +87,19 @@ lib/
   csv/signals.ts        119 신호 서브시스템 분류
   data/duckdb.ts        읽기전용 커넥션 싱글톤
   data/queries.ts       Repository 쿼리(신호명 화이트리스트로 인젝션 차단)
+  indicators/catalog.ts FDC 지표 카탈로그(20종) — 단일 출처
+  indicators/sql.ts     wafer_step_indicators 빌드 SQL
   spc/limits.ts         I-MR 개별값 관리한계(σ = MR_bar / 1.128) — 컨텍스트 적응형
   spc/rules.ts          Western Electric 4 룰
   spc/scan.ts           대시보드 위험 스캔
-components/             ControlChart · TraceChart · 탐색기/선택기
-scripts/ingest.ts       CSV → DuckDB
+  spc/(adaptive·baseline·variance·spec·charts/…)  Phase I/II 동결·Cpk/Ppk·EWMA/CUSUM/잔차
+  fdc/(pca·mspc·contribution·dtw·golden-trace)    다변량 T²/Q·골든트레이스
+  commonality/analyze.ts  이상치(robust z)·ratio-gap·2-비율 z 검정(순수)
+  equipment/states.ts   가동/유휴 union 재구성·PM 프록시(순수)
+  yield/schema.ts       수율 테이블 계약(plug-in, 조인키 lot+wafer_no)
+components/             ControlChart · TraceChart · MspcChart · 탐색기/선택기
+scripts/ingest.ts       CSV → DuckDB (+지표 테이블)
+scripts/build-indicators.ts  지표 재빌드   scripts/load-quality.ts  수율 적재
 ```
 
 ### SPC 모델

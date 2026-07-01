@@ -12,9 +12,11 @@ import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { fetchJson } from '@/lib/api/client';
 import type { ContextMeta, SignalStat } from '@/lib/api/types';
-import type { ControlChartResult } from '@/lib/spc/types';
+import type { AdaptiveSpcResult } from '@/lib/spc/types';
 import { signalsBySubsystem } from '@/lib/csv/signals';
+import { CHARTABLE_INDICATORS } from '@/lib/indicators/catalog';
 import LimitsReadout from './LimitsReadout';
+import AdaptiveInsights from './AdaptiveInsights';
 import ViolationList from './ViolationList';
 
 // ECharts는 클라이언트 전용 — SSR 비활성화
@@ -23,13 +25,22 @@ const ControlChart = dynamic(() => import('@/components/charts/ControlChart'), {
   loading: () => <div className="empty-state">차트 로딩 중…</div>,
 });
 
+/** 지표 분류 한글 라벨(드롭다운 그룹) */
+const INDICATOR_KIND_LABEL: Record<string, string> = {
+  level: '수준',
+  dispersion: '산포',
+  shape: '형상/동특성',
+  meta: '메타',
+};
+
 export default function SpcExplorer() {
   const [meta, setMeta] = useState<ContextMeta | null>(null);
   const [recipe, setRecipe] = useState('');
   const [stage, setStage] = useState('');
   const [step, setStep] = useState<number | null>(null);
   const [signal, setSignal] = useState('');
-  const [result, setResult] = useState<ControlChartResult | null>(null);
+  const [indicator, setIndicator] = useState('mean');
+  const [result, setResult] = useState<AdaptiveSpcResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -83,12 +94,12 @@ export default function SpcExplorer() {
     if (!recipe || !stage || step === null || !signal) return;
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ recipe, stage, step: String(step), signal });
-    fetchJson<ControlChartResult>(`/api/spc?${params}`)
+    const params = new URLSearchParams({ recipe, stage, step: String(step), signal, indicator });
+    fetchJson<AdaptiveSpcResult>(`/api/spc?${params}`)
       .then(setResult)
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [recipe, stage, step, signal]);
+  }, [recipe, stage, step, signal, indicator]);
 
   // 선택 핸들러(상위 변경 시 하위 초기화 — 불변 갱신)
   const onRecipe = (v: string) => { setRecipe(v); setStage(''); setStep(null); setResult(null); };
@@ -138,6 +149,21 @@ export default function SpcExplorer() {
             ))}
           </select>
         </label>
+
+        <label className="field">
+          <span className="field-label">지표 (FDC indicator)</span>
+          <select value={indicator} onChange={(e) => setIndicator(e.target.value)} disabled={!signal}>
+            {(['level', 'dispersion', 'shape', 'meta'] as const).map((kind) => {
+              const items = CHARTABLE_INDICATORS.filter((i) => i.kind === kind);
+              if (items.length === 0) return null;
+              return (
+                <optgroup key={kind} label={INDICATOR_KIND_LABEL[kind]}>
+                  {items.map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}
+                </optgroup>
+              );
+            })}
+          </select>
+        </label>
       </div>
 
       {error && <div className="card" style={{ borderColor: 'var(--color-alarm)' }}>오류: {error}</div>}
@@ -151,9 +177,14 @@ export default function SpcExplorer() {
       {result && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', opacity: loading ? 0.5 : 1, transition: 'opacity 150ms' }}>
           <LimitsReadout result={result} />
+          <AdaptiveInsights result={result} />
           <div className="card">
             <div className="card-title" style={{ marginBottom: '0.5rem' }}>
-              {result.signal} · {result.context.recipe} / {result.context.stage} / Step {result.context.recipeStepNum}
+              {result.signal}
+              <span className="badge badge-ok" style={{ margin: '0 0.4rem' }}>
+                {CHARTABLE_INDICATORS.find((i) => i.id === (result.indicator ?? 'mean'))?.label ?? result.indicator}
+              </span>
+              · {result.context.recipe} / {result.context.stage} / Step {result.context.recipeStepNum}
             </div>
             <ControlChart result={result} />
           </div>

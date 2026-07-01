@@ -10,6 +10,9 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "ingest": "tsx scripts/ingest.ts",
+    "build:indicators": "tsx scripts/build-indicators.ts",
+    "load:quality": "tsx scripts/load-quality.ts",
+    "benchmark": "tsx scripts/benchmark.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test"

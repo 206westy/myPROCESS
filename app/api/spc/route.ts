@@ -4,9 +4,10 @@
  */
 
 import { type NextRequest } from 'next/server';
-import { buildControlChart } from '@/lib/spc/service';
+import { buildAdaptiveControlChart } from '@/lib/spc/service';
 import { spcQuerySchema, searchParamsToObject } from '@/lib/validation';
 import { assertSignal } from '@/lib/data/queries';
+import { assertIndicator } from '@/lib/indicators/catalog';
 import { ok, fail } from '@/lib/api/response';
 
 export const dynamic = 'force-dynamic';
@@ -19,17 +20,19 @@ export async function GET(req: NextRequest) {
     return fail(parsed.error.issues.map((i) => i.message).join(', '));
   }
 
-  const { recipe, stage, step, signal } = parsed.data;
+  const { recipe, stage, step, signal, indicator } = parsed.data;
   try {
     assertSignal(signal); // 화이트리스트 검증(인젝션 방지)
-  } catch {
-    return fail(`알 수 없는 신호명: ${signal}`);
+    assertIndicator(indicator); // 지표 화이트리스트 검증
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : `잘못된 파라미터`);
   }
 
   try {
-    const result = await buildControlChart(
+    const result = await buildAdaptiveControlChart(
       { recipe, stage, recipeStepNum: step },
       signal,
+      indicator,
     );
     return ok(result);
   } catch (err) {

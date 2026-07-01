@@ -74,3 +74,103 @@ export interface ControlChartResult {
   limits: ControlLimits;
   violations: Violation[];
 }
+
+// ───────────────────────── 적응형 확장 타입 ─────────────────────────
+
+/** 차트 종류 */
+export type ChartType = 'imr' | 'ewma' | 'cusum' | 'residual';
+
+/** 한계 신뢰도 등급 */
+export type TrustGrade = 'high' | 'medium' | 'low';
+
+/**
+ * 단기(within) vs 전체(total) 변동 분해 + 한계 신뢰도.
+ * ratio = σ_total / σ_within. 1에 가까우면 I-MR 한계가 타당,
+ * 크면(예: 3↑) 드리프트/이질 모집단으로 한계가 과소(좁게) 추정됨.
+ */
+export interface TrustScore {
+  sigmaWithin: number;
+  sigmaTotal: number;
+  ratio: number;
+  grade: TrustGrade;
+  /** 평이한 설명(사용자 표시용) */
+  explanation: string;
+}
+
+/** 베이스라인(골든) 참조 — 한계를 여기서 1회 산출·동결 */
+export interface BaselineRef {
+  /** 베이스라인에 쓰인 점 인덱스(원본 시간순) */
+  indices: number[];
+  /** 베이스라인 점 개수 */
+  n: number;
+  /** 선정 방식 설명 */
+  method: string;
+}
+
+/** 고정 규격(엔지니어링/고객 스펙) — 관리한계와 분리 */
+export interface SpecLimits {
+  target: number | null;
+  usl: number | null;
+  lsl: number | null;
+  /** 규격 출처(setpoint 신호명 또는 'manual') */
+  source: string;
+}
+
+/** 공정능력 지수 */
+export interface Capability {
+  cp: number | null;
+  cpk: number | null;
+  pp: number | null;
+  ppk: number | null;
+  explanation: string;
+}
+
+/** 자기상관/변화점 진단 */
+export interface Diagnostics {
+  lag1Autocorr: number;
+  autocorrSignificant: boolean;
+  changePointIndex: number | null;
+  /** 정규성 거칠게 판단(왜도 기반) */
+  skewness: number;
+}
+
+/** 차트 추천 결과 */
+export interface ChartRecommendation {
+  recommended: ChartType;
+  reason: string;
+  alternatives: ChartType[];
+}
+
+/** 시변 한계를 갖는 차트(점별 통계량 + 점별 한계) */
+export interface SeriesChart {
+  type: ChartType;
+  /** 점별 플롯 통계량(EWMA z, CUSUM C±, 잔차 등) */
+  statistic: number[];
+  centerLine: number;
+  /** 점별 상한(시변 가능) */
+  ucl: number[];
+  /** 점별 하한 */
+  lcl: number[];
+  violations: Violation[];
+  description: string;
+}
+
+/** 적응형 SPC 종합 결과(API 반환) */
+export interface AdaptiveSpcResult {
+  context: SpcContext;
+  signal: string;
+  /** 분석 지표 id(기본 'mean'). 지표 엔진으로 선택된 점 통계량 */
+  indicator?: string;
+  points: WaferPoint[];
+  /** 베이스라인 동결 I-MR 한계 */
+  limits: ControlLimits;
+  baseline: BaselineRef;
+  trust: TrustScore;
+  diagnostics: Diagnostics;
+  recommendation: ChartRecommendation;
+  /** 추천 차트의 시변 한계 시리즈 */
+  chart: SeriesChart;
+  spec: SpecLimits;
+  capability: Capability;
+  violations: Violation[];
+}
