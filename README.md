@@ -1,121 +1,158 @@
-# EHM 모니터링 플랫폼 (FDC / 컨텍스트 적응형 SPC)
+# 공정-장비 관리 플랫폼
 
-SupraXP 드라이스트립(애싱) 설비의 **EHM(Equipment Health Monitoring) 트레이스 데이터**를 기반으로 한
-반도체 설비·공정 모니터링 의사결정 플랫폼.
+> 반도체 **드라이스트립(애싱) 설비**의 고주파 센서 데이터를 "현장 엔지니어가 바로 판단할 수 있는 그림"으로 바꿔주는 웹 플랫폼입니다.
+> 핵심은 **컨텍스트 적응형** — 전체를 하나의 잣대로 보지 않고, *공정 맥락(Recipe·Stage·Step)별로 정상 범위를 따로* 판단합니다.
 
-핵심 차별점: **컨텍스트 적응형 SPC** — 전역 고정 관리한계가 아니라
-`Recipe × Stage × Step` 공정 맥락별로 관리한계를 **동적 산출**한다.
+![대시보드](docs/screenshots/dashboard.png)
 
-## 기술 스택
+---
 
-| 영역 | 선택 | 비고 |
+## 🧭 이 플랫폼이 푸는 문제
+
+설비 1대는 웨이퍼 한 장을 처리하는 동안 **120여 개 센서**(온도·압력·가스·RF 파워…)를 **약 0.3초마다** 기록합니다.
+하루면 수십만 행이 쌓이죠. 이 방대한 데이터를 놓고 엔지니어가 답하고 싶은 질문은 결국 몇 가지입니다.
+
+- **"지금 어디가 이상하지?"** → 대시보드 · 적응형 SPC
+- **"이 이상, 어느 공정·챔버·Lot에 몰려 있지?"** → Commonality
+- **"여러 센서가 같이 틀어진 건 아닐까?"** → 다변량 FDC
+- **"장비는 얼마나 잘 돌고, 정비는 언제 하지?"** → 장비관리
+- **"어떤 공정 변수가 수율과 연결되지?"** → 수율 연결(계획)
+
+이 플랫폼은 그 질문마다 **화면(탭) 하나**로 답합니다.
+
+### 데이터가 흐르는 길
+
+```mermaid
+flowchart LR
+  A["센서 트레이스<br/>120채널 · 0.3초"] --> B["구간 자르기<br/>Recipe·Stage·Step"]
+  B --> C["지표 추출<br/>평균·기울기·오버슈트 등 20종"]
+  C --> D{분석}
+  D --> E["적응형 SPC<br/>맥락별 관리한계"]
+  D --> F["다변량 FDC<br/>T² · SPE"]
+  E --> G["이상 검출"]
+  F --> G
+  G --> H["Commonality<br/>원인 컨텍스트"]
+  G --> I["수율 연결<br/>(계획)"]
+```
+
+> 💡 **핵심 아이디어 한 줄**: 같은 센서라도 Recipe가 다르면 정상값이 다릅니다(A레시피 53, B레시피 20).
+> 그래서 **하나의 고정 잣대**를 쓰지 않고, **맥락별로 잣대를 따로** 만들어 "그 맥락 안에서" 이상을 판정합니다. 이게 **적응형**입니다.
+
+---
+
+## 📊 화면 안내
+
+### 대시보드 — "지금 어디가 위험한가"
+KPI(총 샘플·웨이퍼 런·SPC 위반)와 **공정 위험 순위**(상위 컨텍스트 × 핵심 신호)를 한눈에. 위반이 많은 조합부터 관리도로 바로 이동합니다.
+
+### 적응형 SPC — "정상 범위를 데이터가 스스로 정한다"
+![적응형 SPC](docs/screenshots/spc.png)
+
+Recipe→Stage→Step→신호→지표를 고르면, **그 맥락의 웨이퍼들로 관리한계를 동적으로 계산**해 보여줍니다.
+- **관리한계(UCL/LCL) ≠ 규격(USL/LSL)** 을 명확히 구분
+- 데이터를 진단해 **가장 적합한 관리도를 자동 추천**(이유 포함) — 아래 로직대로 움직입니다:
+
+```mermaid
+flowchart TD
+  S["웨이퍼 지표 시계열"] --> A{"자기상관 유의?<br/>(앞 점이 뒤에 영향)"}
+  A -- 예 --> R["잔차 차트<br/>자기상관 제거"]
+  A -- 아니오 --> B{"한계 신뢰 낮음?<br/>(드리프트·이질)"}
+  B -- 예 --> R
+  B -- 아니오 --> C{"레벨 시프트 후보?"}
+  C -- 예 --> U["CUSUM<br/>작은 지속 시프트"]
+  C -- 아니오 --> E["EWMA<br/>(+ I-MR 병기)"]
+```
+> 자동이되 **투명**합니다 — 왜 그 차트를 골랐는지 설명이 붙고, 대안도 함께 제시돼 엔지니어가 최종 판단합니다.
+
+### FDC 트레이스 — "웨이퍼 원형 그대로 비교"
+한 웨이퍼-스텝의 고주파 트레이스를 여러 신호로 **정규화 오버레이**. 모양이 평소와 다른 런을 눈으로 찾습니다.
+
+### 다변량 FDC — "120개 신호를 2축으로 압축"
+![다변량 FDC](docs/screenshots/mspc.png)
+
+여러 센서를 **PCA로 압축**한 뒤 두 잣대로 봅니다.
+- **T²** — 정상 패턴의 중심에서 얼마나 멀리 갔나
+- **SPE/Q** — 정상 패턴 자체를 벗어났나(센서 관계가 깨진 새 고장)
+- 경보가 뜨면 **기여도**로 "어느 서브시스템이 범인인지" 되짚습니다.
+
+### Commonality — "이상이 어디에 몰려 있나"
+![Commonality](docs/screenshots/commonality.png)
+
+이상 웨이퍼 집합이 어떤 **Step·챔버·Lot·날짜**에 과대표집됐는지 **ratio-gap**으로 순위화(불량 원인 좁히기). 통계적 유의성(2-비율 검정)과 최소 표본으로 노이즈를 걸러냅니다.
+
+### 장비관리 — "얼마나 일하고 언제 정비하나"
+![장비관리](docs/screenshots/equipment.png)
+
+트레이스로 **가동/유휴 타임라인을 재구성**(SEMI E10 영감)해 가동률·평균 런 간격·잠재 다운타임을 보여주고, **RF 누적 가동시간으로 PM(정비) 시점을 프록시**합니다.
+
+### 수율 연결 — "공정 변수 ↔ 수율" (계획 · 데이터 연결 시 활성화)
+![수율 연결](docs/screenshots/yield.png)
+
+FDC 지표와 수율/결함을 **웨이퍼 단위로 조인(lot + wafer_no)** 해 상관을 순위화합니다. 현재 데이터셋엔 수율이 없어 **조인 키·계약만 준비**돼 있고, `data/quality.csv`를 넣으면 바로 켜집니다.
+
+### 벤치마크 — "검출법 성능 시험"
+합성 결함을 주입해 정답을 알고, 정적 3σ vs EWMA vs CUSUM의 **재현율·정밀도·F1·ARL**을 겨룹니다. "우리 공정엔 어떤 방법이 맞나"를 근거로 고르게 해줍니다.
+
+### 📖 가이드북 — "통계를 고교 수준으로"
+![가이드북](docs/screenshots/guide.png)
+
+위 모든 방법론의 통계 아이디어를 **비유 → 실데이터 예시 → 그래프 → 해석법 → 함정** 틀로 설명합니다.
+PCA vs PLS, 누적분포(ECDF)로 변화 잡기 같은 **확장 개념**도 포함해, 데이터가 늘었을 때의 방향까지 제시합니다.
+
+---
+
+## 🧠 통계 아이디어 한눈에
+
+| 화면 | 핵심 통계 | 쉽게 말하면 |
 |---|---|---|
-| 프레임워크 | Next.js 15 (App Router) + TypeScript | |
-| 데이터 | DuckDB (`@duckdb/node-api`) | CSV 1회 인제스트 → 컬럼형 분석 쿼리 |
-| 차트 | ECharts (동적 임포트) | 고주파 트레이스 / 관리도 |
-| 검증 | Zod | API 경계 입력 검증 |
-| 테스트 | Vitest (+ Playwright 예정) | SPC 수학 단위 테스트 |
-| 패키지 | pnpm | |
+| FDC 지표 | 요약통계·로버스트(MAD/IQR) | 긴 영상을 몇 개 숫자로 |
+| 적응형 SPC | I-MR·3σ·WE룰·Phase I/II·EWMA/CUSUM·Cpk | 반마다 커트라인 따로, 규격과 구분 |
+| 다변량 FDC | PCA·Hotelling T²·SPE/Q·기여도 | 120과목을 2축으로 압축 |
+| Commonality | 로버스트 z·ratio-gap·2-비율 검정 | 불량이 어느 반에 몰렸나 |
+| 장비관리 | 구간 union·평균 간격·누적 마모 | 가동 시간표 합치기 |
+| 수율 연결 | 피어슨/점이연 상관 (→ PLS-DA 확장) | 같이 움직이나 |
+| 벤치마크 | ARL·정밀도/재현율/F1 | 화재경보기 성능시험 |
 
-## 데이터
+> 더 자세한 직관·수식·그래프는 앱의 **가이드북** 탭에서 확인하세요.
 
-- 원본: `supraxp_ehm target data/` (32 CSV 파트, 127 컬럼, 107,165 행) — **git 추적 제외**
-- 컨텍스트/키 7 컬럼: `Processed Time, Lot, Recipe, Stage, Wafer No., System Label, Recipe_Step_Num`
-- 센서 신호 119 컬럼: APC / Gas1–5 / Mat(RF매처) / SourcePwr / Pin / Wall·Temp / Water / EPD …
-- 분포: 26 Lot · 8 Recipe · 4 Stage · 9 Step · 292 웨이퍼 런 · 124 컨텍스트 · 55 아날로그 신호
+---
 
-### 파싱 주의
+## 🚀 앞으로의 방향 (로드맵)
 
-- `System Label`에 콤마 포함(`"HS.Good,SA.Good"`) → DuckDB `read_csv(all_varchar=true)`로 처리
-- 타임스탬프 ISO에 밀리초 유무 혼재(`.344Z` vs `Z`) → `try_strptime` 2-포맷 폴백
+수율/품질 데이터가 연결되면 다음으로 확장됩니다.
 
-## 시작하기
+```mermaid
+flowchart LR
+  Q["수율 데이터<br/>연결 (quality.csv)"] --> P1["① T²/SPE 이상 ↔ 합격/불합격<br/>2-비율 결합"]
+  Q --> P2["② PLS-DA<br/>P/F를 가장 잘 가르는 축"]
+  Q --> P3["③ VIP 변수 순위<br/>결과에 중요한 신호"]
+  D["분포 드리프트 감시"] --> P4["ECDF · K-S · PSI 탭"]
+```
+
+- **수율 연결 활성화** — 상관을 넘어 **PLS-DA**(합격/불합격을 가장 잘 가르는 다변량 축)와 **VIP**(수율에 중요한 변수 순위)
+- **분포 변화 감시** — 베이스라인 ECDF를 동결해 두고 현재와 **K-S/PSI**로 비교(평균은 그대로인데 꼬리만 두꺼워진 변화까지 포착)
+- **다중 설비 모델 확장** — 현재 SupraXP 외 PRECIA·PROLITE·Supra Vplus로 (암호화 해제 데이터 확보 시)
+
+---
+
+## ⚙️ 기술 & 시작하기
+
+- **스택**: Next.js(App Router) · TypeScript · DuckDB(분석 쿼리) · ECharts(차트)
+- **데이터**: 원시 CSV·DB는 저장소에 올리지 않습니다(로컬 전용, `.gitignore` 처리).
 
 ```bash
 pnpm install
+pnpm ingest            # CSV → DuckDB (지표 테이블 포함)
+pnpm dev               # http://localhost:3000
 
-# 1) CSV → DuckDB 인제스트 (data/ehm.duckdb 생성, 지표 테이블 포함, 검증)
-pnpm ingest
-
-# 1b) (기존 DB에 지표만 추가/재빌드 — CSV 재인제스트 없이)
-pnpm build:indicators
-
-# 1c) (선택) 수율/품질 CSV 연결 — data/quality.csv 있으면 wafer_quality 적재
-pnpm load:quality
-
-# 2) 개발 서버
-pnpm dev          # http://localhost:3000
-
-# 기타
-pnpm build        # 프로덕션 빌드
-pnpm typecheck    # tsc --noEmit
-pnpm test         # vitest (SPC 수학)
+# 선택
+pnpm build:indicators  # 기존 DB에 지표만 재빌드
+pnpm load:quality      # data/quality.csv 있으면 수율 연결 활성화
+pnpm test              # 통계 로직 단위 테스트
 ```
 
-> `pnpm ingest`는 원본 CSV가 `supraxp_ehm target data/`에 있어야 동작한다(데이터는 별도 제공).
+> 스크린샷 갱신: `pnpm dev` 실행 후 `node scripts/screenshots.mjs` → `docs/screenshots/*.png`
 
-## 화면
+---
 
-| 경로 | 설명 |
-|---|---|
-| `/` | 대시보드 — KPI, 공정 위험 순위(핵심 신호×상위 컨텍스트 SPC 스캔), 최근 런 |
-| `/spc` | **컨텍스트 적응형 SPC** — 컨텍스트별 동적 관리한계 + WE 룰 + **지표(indicator) 선택** |
-| `/fdc` | FDC 트레이스 — 웨이퍼 런별 다중 신호 정규화 오버레이 |
-| `/mspc` | 다변량 FDC — 컨텍스트별 PCA + Hotelling T² + SPE/Q + 기여도 |
-| `/commonality` | **Commonality** — 이상 웨이퍼가 몰린 컨텍스트(recipe/stage/step/챔버/lot/날짜) ratio-gap 순위 |
-| `/equipment` | **장비관리** — 트레이스 재구성 가동률(E10 영감)·평균 런 간격·RF 누적 PM 프록시 |
-| `/yield` | **수율 연결** — 지표↔수율 Pearson 상관(데이터 연결 시 활성, 조인 키 lot+wafer_no) |
-| `/benchmark` | 검출법 벤치마크(합성 결함·ARL·P/R/F1) |
-
-### FDC 지표 엔진 (`wafer_step_indicators`)
-
-산업 표준 FDC 파이프라인 **Trace → Window → Indicator → SPC/MSPC**의 지표층.
-인제스트 시 신호×step별로 표준 지표 카탈로그(mean·median·std·robust_std·slope·area·
-overshoot·rate_of_change·percentile 등 20종)를 **단일 패스 집계로 사전계산**해
-materialized 테이블에 적재한다(265,727행 · 119신호 · 2,233 웨이퍼×step). SPC/Commonality/
-수율 상관이 모두 이 테이블 위에서 동작한다. 정의는 `lib/indicators/catalog.ts` 단일 출처.
-
-## 아키텍처
-
-```
-app/
-  page.tsx              대시보드(서버 컴포넌트, DB 직접 조회)
-  spc/ · fdc/           탐색기 페이지
-  api/context|spc|wafers|trace/route.ts   REST(엔벨로프 + Zod 검증)
-lib/
-  csv/columns.ts        127 컬럼 스키마(인제스트/쿼리 공유)
-  csv/signals.ts        119 신호 서브시스템 분류
-  data/duckdb.ts        읽기전용 커넥션 싱글톤
-  data/queries.ts       Repository 쿼리(신호명 화이트리스트로 인젝션 차단)
-  indicators/catalog.ts FDC 지표 카탈로그(20종) — 단일 출처
-  indicators/sql.ts     wafer_step_indicators 빌드 SQL
-  spc/limits.ts         I-MR 개별값 관리한계(σ = MR_bar / 1.128) — 컨텍스트 적응형
-  spc/rules.ts          Western Electric 4 룰
-  spc/scan.ts           대시보드 위험 스캔
-  spc/(adaptive·baseline·variance·spec·charts/…)  Phase I/II 동결·Cpk/Ppk·EWMA/CUSUM/잔차
-  fdc/(pca·mspc·contribution·dtw·golden-trace)    다변량 T²/Q·골든트레이스
-  commonality/analyze.ts  이상치(robust z)·ratio-gap·2-비율 z 검정(순수)
-  equipment/states.ts   가동/유휴 union 재구성·PM 프록시(순수)
-  yield/schema.ts       수율 테이블 계약(plug-in, 조인키 lot+wafer_no)
-components/             ControlChart · TraceChart · MspcChart · 탐색기/선택기
-scripts/ingest.ts       CSV → DuckDB (+지표 테이블)
-scripts/build-indicators.ts  지표 재빌드   scripts/load-quality.ts  수율 적재
-```
-
-### SPC 모델
-
-- 관리도 1점 = 한 웨이퍼 런에서 신호의 스텝 구간 평균
-- 관리한계 = **그 컨텍스트(Recipe×Stage×Step)에 속한 웨이퍼 점들로부터만** 산출(I-MR)
-- 위반: WE Rule 1(3σ 밖) / 2(3중 2점 2σ) / 3(5중 4점 1σ) / 4(연속 8점 한쪽)
-- 표본 부족(<8점) 시 `insufficient` 플래그로 한계 불안정성 표시
-
-## 보안
-
-- 신호명은 SQL 식별자로 보간되므로 `SIGNAL_COLUMNS` 화이트리스트로 검증(인젝션 차단)
-- 그 외 모든 값은 바인드 파라미터 전달
-- API 입력은 Zod 스키마로 경계 검증
-
-## 남은 작업
-
-- Playwright E2E(핵심 플로우) · 쿼리 통합 테스트 · 커버리지 80% 달성
-- 위험 스캔 캐싱(대시보드 로드 시 컨텍스트×신호 스캔 비용 절감)
+<sub>모든 화면·수치는 실제 SupraXP 설비 데이터에 기반합니다(수율 화면만 개념 예시). 통계 상세는 `docs/methodology.md` 참고.</sub>
