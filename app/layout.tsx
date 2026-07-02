@@ -3,12 +3,13 @@ import Link from 'next/link';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'EHM 모니터링 플랫폼',
-  description: 'SupraXP 드라이스트립 설비 FDC / 컨텍스트 적응형 SPC',
+  title: '공정-장비 관리 플랫폼',
+  description: '반도체 공정·장비 데이터 기반 FDC / 컨텍스트 적응형 SPC 의사결정 플랫폼',
 };
 
 const NAV = [
   { href: '/', label: '대시보드' },
+  { href: '/guide', label: '가이드북' },
   { href: '/spc', label: '적응형 SPC' },
   { href: '/fdc', label: 'FDC 트레이스' },
   { href: '/mspc', label: '다변량 FDC' },
@@ -27,8 +28,8 @@ export default function RootLayout({
         <div className="app-shell">
           <aside className="app-sidebar">
             <div className="app-brand">
-              <span className="app-brand-mark">EHM</span>
-              <span className="app-brand-sub">Equipment Health Monitoring</span>
+              <span className="app-brand-mark">공정·장비</span>
+              <span className="app-brand-sub">관리 플랫폼 · Process-Equipment</span>
             </div>
             <nav className="app-nav" aria-label="주 메뉴">
               {NAV.map((item) => (
